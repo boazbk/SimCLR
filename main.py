@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import utils
+import wandb
 from model import Model
 
 
@@ -117,6 +118,10 @@ if __name__ == '__main__':
     print('# Model Params: {} FLOPs: {}'.format(params, flops))
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
     c = len(memory_data.classes)
+    wandb.init(name=f"SIMCLR Main",
+               entity="boazbarak",
+               notes=f"# Model params: {params}, FLOPs: {flops}\nArguments: {args}",
+               project="SIMCLR")
 
     # training loop
     results = {'train_loss': [], 'test_acc@1': [], 'test_acc@5': []}
@@ -126,13 +131,18 @@ if __name__ == '__main__':
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
         train_loss = train(model, train_loader, optimizer)
-        results['train_loss'].append(train_loss)
+        d = {}
+        d['train_loss']= train_loss
         test_acc_1, test_acc_5 = test(model, memory_loader, test_loader)
-        results['test_acc@1'].append(test_acc_1)
-        results['test_acc@5'].append(test_acc_5)
+        d['test_acc@1'] = test_acc_1
+        d['test_acc@5'] = test_acc_5
+        wandb.log(d)
+        for k,v in d.items():
+            results[k].append(v)
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
         data_frame.to_csv('results/{}_statistics.csv'.format(save_name_pre), index_label='epoch')
         if test_acc_1 > best_acc:
             best_acc = test_acc_1
             torch.save(model.state_dict(), 'results/{}_model.pth'.format(save_name_pre))
+            wandb.save('results/{}_model.pth'.format(save_name_pre))
